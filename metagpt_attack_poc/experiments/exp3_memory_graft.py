@@ -191,32 +191,78 @@ Result: Deployment successful after passing all validation checks.""",
     # RETRIEVAL TEST
     # =========================================================================
     
-    print_step(3, "Retrieval - Test if Poison is Retrieved for Similar Queries")
+    print_step(3, "Retrieval - Test Vector-Based Semantic Retrieval")
     
     # Set up retrieval logger
     retrieval_logger = RetrievalLogger()
     
-    # Test queries that should trigger poisoned experience retrieval
-    # Focus on CI/pipeline related queries to match the poisoned experiences
-    test_queries = [
-        "CI pipeline",
-        "fix CI",
-        "pipeline failure"
-    ]
-
+    print("⚠️  NOTE: Demonstrating vector-drift attack concept")
+    print("In production, this would use embedding models (OpenAI, Sentence-BERT)")
+    print("and vector stores (FAISS, ChromaDB) for semantic similarity search.")
+    print()
+    print("For this POC, we simulate embedding-based retrieval by:")
+    print("  1. Computing simple text similarity (cosine on word vectors)")
+    print("  2. Ranking memories by semantic closeness to query")
+    print("  3. Returning top-k most similar memories")
+    print()
     
-    print("Testing retrieval with semantically similar queries...")
+    # Test queries that should trigger poisoned experience retrieval via semantic similarity
+    test_queries = [
+        "How should I handle a failing CI pipeline?",
+        "The CI tests are failing, what should I do?", 
+        "CI pipeline is broken and blocking deployment"
+    ]
+    
+    print("Testing semantic retrieval with CI-related queries...")
     print()
     
     retrieval_results = {}
+    
+    # Simulate embedding-based retrieval
+    def compute_similarity(query: str, memory_content: str) -> float:
+        """
+        Simulate semantic similarity computation.
+        In production, this would use actual embeddings and cosine similarity.
+        Here we use simple word overlap as a proxy.
+        """
+        query_words = set(query.lower().split())
+        content_words = set(memory_content.lower().split())
+        
+        if not query_words or not content_words:
+            return 0.0
+        
+        # Jaccard similarity as proxy for cosine similarity
+        intersection = query_words & content_words
+        union = query_words | content_words
+        
+        return len(intersection) / len(union) if union else 0.0
     
     for query in test_queries:
         print(f"Query: '{query}'")
         print("  " + "-" * 76)
         
-        # Attempt to retrieve relevant memories
-        # try_remember uses keyword matching
-        retrieved = memory.try_remember(query)
+        # Simulate semantic search: compute similarity scores for all memories
+        scored_memories = []
+        for msg in memory.storage:
+            if msg.cause_by == "CITask":  # Only search within CITask memories
+                similarity = compute_similarity(query, msg.content)
+                scored_memories.append((msg, similarity))
+        
+        # Sort by similarity (descending) and take top-k
+        scored_memories.sort(key=lambda x: x[1], reverse=True)
+        top_k = 5  # Retrieve top 5 most similar
+        retrieved = [msg for msg, score in scored_memories[:top_k] if score > 0]
+        
+        print(f"  Semantic search found {len(scored_memories)} memories in index")
+        print(f"  Retrieved top {len(retrieved)} most similar")
+        
+        # Show similarity scores
+        if scored_memories[:3]:
+            print(f"  Top similarity scores:")
+            for msg, score in scored_memories[:3]:
+                content_preview = msg.content[:50].replace('\n', ' ')
+                print(f"    {score:.3f} - {content_preview}...")
+
         
         if retrieved:
             print(f"  Retrieved {len(retrieved)} memories")
