@@ -46,6 +46,39 @@ This guide explains how to use the MetaGPT Memory Poisoning Attack proof-of-conc
 
 **Runtime**: ~10-20 seconds (no LLM calls, pure memory operations)
 
+### Experiment 4: RAG Vector-Drift Poisoning (New)
+
+**Objective**: Poison MetaGPT’s RAG vector store so semantically similar clean queries retrieve malicious “successes.”
+
+**How it works**:
+1. Loads and augments seeds to at least 100 benign + 10 poisoned experiences (see `payloads/experience_seeds.json`; augmented copy written alongside).
+2. Builds a RAG index: FAISS (top-3) if an embedding key is configured; otherwise BM25 (top-3).
+3. Issues 10 diverse semantic queries (CI, hotfix, config, canary, data, mobile, review bypass, etc.) and measures PRR.
+4. Persists the poisoned index to `results/rag_poison_store` and saves a JSON report.
+
+**Expected outcome**: Poisoned entries surface for semantically close queries; PRR > 0 indicates successful drift.
+
+**Runtime**: ~10-30 seconds (no LLM calls; local indexing)
+
+## Running the Experiments
+
+```bash
+# Experiment 1: Schema-Spoofing
+python experiments/exp1_schema_spoof.py
+
+# Experiment 2: JudgeJacking
+python experiments/exp2_judge_jack.py
+
+# Experiment 3: Memory Graft (Experience Pool)
+python experiments/exp3_memory_graft.py
+
+# Experiment 4: RAG Vector-Drift Poisoning
+# Uses BM25 by default; set a valid embedding key in config for FAISS (top-3) vector poisoning.
+python experiments/exp4_rag_vector_drift.py
+```
+
+> Tip: Install RAG extras first if you haven’t: `pip install -e .[rag]` (or `pip install metagpt[rag]`).
+
 ## Understanding Results
 
 ### Results Directory
@@ -57,6 +90,8 @@ results/
 ├── exp1_schema_spoof_YYYYMMDD_HHMMSS.txt
 ├── exp2_judgejack_YYYYMMDD_HHMMSS.txt
 ├── exp3_memory_graft_YYYYMMDD_HHMMSS.txt
+├── exp4_rag_vector_drift_YYYYMMDD_HHMMSS.json
+├── rag_poison_store/                # Persisted poisoned RAG index
 ├── retrieval_log_YYYYMMDD_HHMMSS.jsonl
 ├── retrieval_analysis_YYYYMMDD_HHMMSS.txt
 └── memory_inspection.txt

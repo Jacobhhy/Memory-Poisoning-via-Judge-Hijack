@@ -27,6 +27,32 @@ from metagpt.const import CONFIG_ROOT, METAGPT_ROOT
 from metagpt.utils.yaml_model import YamlModel
 
 
+def _load_env_file():
+    """Load environment variables from a local .env file if present."""
+    env_path = METAGPT_ROOT / ".env"
+    if not env_path.exists():
+        return
+
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, val = line.split("=", 1)
+        key, val = key.strip(), val.strip().strip('"').strip("'")
+        os.environ.setdefault(key, val)
+
+
+def _expand_env_vars(obj):
+    """Recursively expand ${VAR} in strings using environment variables."""
+    if isinstance(obj, str):
+        return os.path.expandvars(obj)
+    if isinstance(obj, dict):
+        return {k: _expand_env_vars(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_expand_env_vars(i) for i in obj]
+    return obj
+
+
 class CLIParams(BaseModel):
     """CLI parameters"""
 
@@ -112,13 +138,14 @@ class Config(CLIParams, YamlModel):
         - Priority: env < default_config_paths
         - Inside default_config_paths, the latter one overwrites the former one
         """
+        _load_env_file()
         default_config_paths = (
             METAGPT_ROOT / "config/config2.yaml",
             CONFIG_ROOT / "config2.yaml",
         )
         if reload or default_config_paths not in _CONFIG_CACHE:
             dicts = [dict(os.environ), *(Config.read_yaml(path) for path in default_config_paths), kwargs]
-            final = merge_dict(dicts)
+            final = _expand_env_vars(merge_dict(dicts))
             _CONFIG_CACHE[default_config_paths] = Config(**final)
         return _CONFIG_CACHE[default_config_paths]
 
