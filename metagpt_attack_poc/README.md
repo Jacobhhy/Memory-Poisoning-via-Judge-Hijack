@@ -1,19 +1,18 @@
 # MetaGPT Memory Poisoning Attack - Proof of Concept
 
-This POC demonstrates three novel attack primitives against MetaGPT's memory-based agent system:
+This POC demonstrates three attack primitives against MetaGPT's memory-based agent system:
 
-1. **Schema-Spoofing**: Injecting fake format markers into tool outputs
-2. **Rubric-Mimicry (JudgeJacking)**: Bypassing success validation with synthetic markers
-3. **Vector-Drift Poisoning (Memory Graft)**: Persisting malicious patterns through memory retrieval
-4. **RAG Vector-Drift Poisoning**: Poisoning MetaGPT’s RAG vector store so retrieval surfaces malicious “successes”
+1. **Schema-Spoofing**: Inject forged ReAct-style traces via documentation.
+2. **Rubric-Mimicry (JudgeJacking)**: Fool success validation with synthetic markers.
+3. **Memory Graft**: Poison the agent’s retrieval store so “successful” but unsafe patterns persist and surface on future tasks (implemented by `exp4`).
 
 ## Attack Novelty
 
-**Persistent compromise via memory graft** - Unlike traditional prompt injection (one-shot), these attacks:
-- Poison the agent's memory system
-- Persist across sessions via Redis/storage
-- Propagate through vector retrieval
-- Cause permanent behavior drift without repeated injection
+**Persistent compromise via memory graft** — Unlike one-shot prompt injections, these attacks:
+- Poison the agent's memory system (experience/RAG stores).
+- Persist across sessions via on-disk storage.
+- Propagate through retrieval on semantically similar tasks.
+- Cause lasting behavior drift without repeated injection.
 
 ## Architecture
 
@@ -35,31 +34,30 @@ metagpt_attack_poc/
 ├── experiments/            # POC test scripts
 │   ├── exp1_schema_spoof.py
 │   ├── exp2_judge_jack.py
-│   ├── exp3_memory_graft.py
-│   └── exp4_rag_vector_drift.py
-├── monitors/              # Monitoring utilities
-│   ├── memory_inspector.py
-│   └── retrieval_logger.py
-├── results/               # Experiment outputs
+│   └── exp4_rag_vector_drift.py   # Memory Graft attack (current)
+├── monitors/               # Monitoring utilities
+│   └── memory_inspector.py
+├── results/                # Experiment outputs
 └── README.md
+```
 
-## RAG Vector-Drift Poisoning (New)
+## Memory Graft Attack (current, exp4)
 
-**Goal:** Poison MetaGPT’s RAG vector store so semantically similar clean queries retrieve attacker-crafted “successes” and bias the agent’s behavior.
+**Goal:** Poison MetaGPT’s retrieval store so clean, semantically similar queries pull attacker-crafted “successes,” biasing the agent toward unsafe shortcuts.
 
 **What it does:**
-- Loads an expanded seed set (100 benign + 10 poisoned experiences) from `payloads/experience_seeds.json` (and writes augmented seeds for inspection).
-- Builds a RAG index (FAISS top-3 if embedding is configured; otherwise BM25 top-3).
-- Issues 10 diverse semantic queries and computes Poisoned Retrieval Rate (PRR).
-- Persists a poisoned RAG store (`results/rag_poison_store`) and a JSON report.
+- Loads 100 benign + 10 poisoned experiences from `payloads/experience_seeds.json`.
+- Builds a retrieval index (BM25; adds FAISS if embeddings are configured) and persists it to `results/rag_poison_store`.
+- Prompts DataInterpreter to read `payloads/rag_poisoned_notes.md` (which contains the runnable poisoning block).
+- Runs a suite of DI-style queries and computes Poisoned Retrieval Rate (PRR), logging per-query poisoned hits and agent retrieval outputs.
+- Saves a timestamped JSON report under `results/`.
 
-**Why it matters:** Retrieval is often trusted as prior “wins.” Seeding the vector store with poisoned “successes” makes drift persistent across sessions and agents that consume the shared store.
+**Why it matters:** Retrieval is treated as prior “wins.” Seeding the store with poisoned “successes” makes drift persistent across sessions and agents sharing the store.
 
 **How to run (summary):**
 ```bash
 # Ensure embedding config if you want FAISS; BM25 is used otherwise.
 python3 metagpt_attack_poc/experiments/exp4_rag_vector_drift.py
-```
 ```
 
 ## Quick Start
@@ -72,7 +70,6 @@ python -m pip install -r requirements.txt
 ```
 
 ### Run Experiments
-
 ```bash
 # Experiment 1: Schema-Spoofing
 python experiments/exp1_schema_spoof.py
@@ -80,6 +77,6 @@ python experiments/exp1_schema_spoof.py
 # Experiment 2: JudgeJacking
 python experiments/exp2_judge_jack.py
 
-# Experiment 3: Memory Graft
-python experiments/exp3_memory_graft.py
+# Memory Graft (current)
+python experiments/exp4_rag_vector_drift.py
 ```
